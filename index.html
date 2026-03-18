@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Africa Weekly Orders Dashboard</title>
+  <title>Africa Orders Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     :root {
@@ -195,13 +195,21 @@
     </div>
   </div>
   <div class="filter-group">
+    <span class="filter-label">Granularity</span>
+    <div class="range-pills" id="granPills">
+      <div class="range-pill" data-gran="day" onclick="setGranularity('day')">Day</div>
+      <div class="range-pill active" data-gran="week" onclick="setGranularity('week')">Week</div>
+      <div class="range-pill" data-gran="month" onclick="setGranularity('month')">Month</div>
+    </div>
+  </div>
+  <div class="filter-group">
     <span class="filter-label">Range</span>
     <div class="range-pills" id="rangePills">
-      <div class="range-pill" data-weeks="4" onclick="setRange(4)">4W</div>
-      <div class="range-pill active" data-weeks="13" onclick="setRange(13)">13W</div>
-      <div class="range-pill" data-weeks="26" onclick="setRange(26)">26W</div>
-      <div class="range-pill" data-weeks="52" onclick="setRange(52)">52W</div>
-      <div class="range-pill" data-weeks="0" onclick="setRange(0)">All</div>
+      <div class="range-pill" data-periods="4" onclick="setRange(4)">4</div>
+      <div class="range-pill active" data-periods="13" onclick="setRange(13)">13</div>
+      <div class="range-pill" data-periods="26" onclick="setRange(26)">26</div>
+      <div class="range-pill" data-periods="52" onclick="setRange(52)">52</div>
+      <div class="range-pill" data-periods="0" onclick="setRange(0)">All</div>
     </div>
   </div>
   <div style="margin-left:auto">
@@ -256,6 +264,7 @@ const CHART_COLORS = {
   orders:   { line: '#00a082', fill: 'rgba(0,160,130,.08)' },
   nc:       { line: '#006b57', fill: 'rgba(0,107,87,.08)' },
   ncp:      { line: '#ffc244', fill: 'rgba(255,194,68,.1)' },
+  prime:    { line: '#7c3aed', fill: 'rgba(124,58,237,.08)' },
   ondemand: { line: '#6b7280', fill: 'rgba(107,114,128,.08)' },
   rolling:  '#e53935',
 };
@@ -263,6 +272,7 @@ const YOY_COLORS = [
   '#00a082', '#006b57', '#ffc244', '#e53935', '#6b7280', '#0ea5e9', '#d946ef', '#84cc16',
 ];
 const PAGE_SIZE = 50;
+const GRAN_LABELS = { day: 'Daily', week: 'Weekly', month: 'Monthly' };
 
 // ═══════════════════════════════════════════════════════════════
 //  METRICS UTILITY FUNCTIONS  (lib/metrics equivalent)
@@ -280,22 +290,42 @@ function calcWoW(current, previous) {
 }
 
 /**
- * Year-over-Year percentage change. Matches by ISO week number.
- * @param {string} weekDate - date string YYYY-MM-DD
+ * Year-over-Year percentage change.
+ * For weekly: matches by ISO week number.
+ * For monthly: matches by month number.
+ * For daily: matches by same day-of-year.
+ * @param {string} periodDate - date string YYYY-MM-DD
  * @param {number} currentVal
- * @param {Map<string, object>} weekMap - keyed by YYYY-MM-DD
+ * @param {Map<string, number>} periodMap - keyed by YYYY-MM-DD
  * @returns {{pct: number|null, priorVal: number|null}}
  */
-function calcYoY(weekDate, currentVal, weekMap) {
-  const d = new Date(weekDate + 'T00:00:00');
-  const isoWk = getISOWeek(d);
-  const isoYr = getISOYear(d);
-  const priorYear = isoYr - 1;
-  // Find the week in the prior year with the same ISO week number
-  for (const [wk, data] of weekMap) {
-    const wd = new Date(wk + 'T00:00:00');
-    if (getISOYear(wd) === priorYear && getISOWeek(wd) === isoWk) {
-      return { pct: calcWoW(currentVal, data), priorVal: data };
+function calcYoY(periodDate, currentVal, periodMap) {
+  const d = new Date(periodDate + 'T00:00:00');
+  if (activeGranularity === 'month') {
+    const month = d.getMonth();
+    const priorYear = d.getFullYear() - 1;
+    for (const [pk, val] of periodMap) {
+      const pd = new Date(pk + 'T00:00:00');
+      if (pd.getFullYear() === priorYear && pd.getMonth() === month) {
+        return { pct: calcWoW(currentVal, val), priorVal: val };
+      }
+    }
+  } else if (activeGranularity === 'day') {
+    const priorDate = new Date(d);
+    priorDate.setFullYear(priorDate.getFullYear() - 1);
+    const key = priorDate.toISOString().slice(0, 10);
+    if (periodMap.has(key)) {
+      const val = periodMap.get(key);
+      return { pct: calcWoW(currentVal, val), priorVal: val };
+    }
+  } else {
+    const isoWk = getISOWeek(d);
+    const priorYear = getISOYear(d) - 1;
+    for (const [pk, val] of periodMap) {
+      const pd = new Date(pk + 'T00:00:00');
+      if (getISOYear(pd) === priorYear && getISOWeek(pd) === isoWk) {
+        return { pct: calcWoW(currentVal, val), priorVal: val };
+      }
     }
   }
   return { pct: null, priorVal: null };
@@ -310,6 +340,17 @@ function calcYoY(weekDate, currentVal, weekMap) {
 function calcNCPenetration(nc, totalOrders) {
   if (!totalOrders || totalOrders === 0) return 0;
   return (nc / totalOrders) * 100;
+}
+
+/**
+ * Prime Penetration: Prime Orders / Orders (excl. on-demand) * 100.
+ * @param {number} ordersPrime
+ * @param {number} ordersNoOndemand
+ * @returns {number}
+ */
+function calcPrimePenetration(ordersPrime, ordersNoOndemand) {
+  if (!ordersNoOndemand || ordersNoOndemand === 0) return 0;
+  return (ordersPrime / ordersNoOndemand) * 100;
 }
 
 /**
@@ -367,14 +408,20 @@ function calcBestWorst(values, labels) {
 }
 
 /**
- * Check if a week date string falls in the current ISO week.
- * @param {string} weekDate - YYYY-MM-DD
+ * Check if a period date is the current (potentially partial) period.
+ * @param {string} periodDate - YYYY-MM-DD
  * @returns {boolean}
  */
-function isCurrentWeek(weekDate) {
+function isCurrentPeriod(periodDate) {
   const now = new Date();
-  return getISOYear(now) === getISOYear(new Date(weekDate + 'T00:00:00'))
-      && getISOWeek(now) === getISOWeek(new Date(weekDate + 'T00:00:00'));
+  const d = new Date(periodDate + 'T00:00:00');
+  if (activeGranularity === 'day') {
+    return d.toISOString().slice(0,10) === now.toISOString().slice(0,10);
+  } else if (activeGranularity === 'month') {
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  } else {
+    return getISOYear(now) === getISOYear(d) && getISOWeek(now) === getISOWeek(d);
+  }
 }
 
 /** ISO week number (1-53). */
@@ -398,13 +445,16 @@ function getISOYear(d) {
 
 /**
  * @typedef {Object} SheetRow
- * @property {string} week - YYYY-MM-DD
+ * @property {string} period - YYYY-MM-DD
  * @property {string} country - 2-letter code
+ * @property {string} granularity - 'day'|'week'|'month'
  * @property {number} ordersNoOndemand
  * @property {number} nc - new customers
  * @property {number} ordersOndemand
+ * @property {number} ordersPrime
  * @property {number} totalOrders
  * @property {number} ncPenetration
+ * @property {number} primePenetration
  */
 
 /**
@@ -416,81 +466,98 @@ function getISOYear(d) {
 function parseSheetData(headers, rows) {
   const idx = {};
   headers.forEach((h, i) => { idx[h.toLowerCase().trim()] = i; });
-  const wi = idx['week'] ?? 0;
+  // Support both old ('week') and new ('period') column names
+  const pi = idx['period'] ?? idx['week'] ?? 0;
   const ci = idx['country'] ?? 1;
   const oi = idx['orders_no_ondemand'] ?? 2;
   const ni = idx['nc'] ?? 3;
   const di = idx['orders_ondemand'] ?? 4;
+  const pri = idx['orders_prime'] ?? idx['prime_orders'] ?? -1;
+  const gi = idx['data_granularity'] ?? idx['granularity'] ?? -1;
 
   return rows.map(r => {
     const ordersNoOndemand = parseInt(r[oi]) || 0;
     const nc = parseInt(r[ni]) || 0;
     const ordersOndemand = parseInt(r[di]) || 0;
+    const ordersPrime = pri >= 0 ? (parseInt(r[pri]) || 0) : 0;
     const totalOrders = ordersNoOndemand + ordersOndemand;
+    const granularity = gi >= 0 && r[gi] ? r[gi].toLowerCase().trim() : 'week';
     return {
-      week: r[wi] || '',
+      period: r[pi] || '',
       country: r[ci] || '',
+      granularity,
       ordersNoOndemand,
       nc,
       ordersOndemand,
+      ordersPrime,
       totalOrders,
       ncPenetration: calcNCPenetration(nc, totalOrders),
+      primePenetration: calcPrimePenetration(ordersPrime, ordersNoOndemand),
     };
-  }).filter(r => r.week);
+  }).filter(r => r.period);
 }
 
 /**
- * @typedef {Object} WeekAgg
- * @property {string} week
+ * @typedef {Object} PeriodAgg
+ * @property {string} period
  * @property {number} ordersNoOndemand
  * @property {number} nc
  * @property {number} ordersOndemand
+ * @property {number} ordersPrime
  * @property {number} totalOrders
  * @property {number} ncPenetration
+ * @property {number} primePenetration
  */
 
 /**
- * Aggregate rows by week (summing across selected countries).
+ * Aggregate rows by period (summing across selected countries).
  * @param {SheetRow[]} rows
- * @returns {WeekAgg[]} sorted chronologically (oldest first)
+ * @returns {PeriodAgg[]} sorted chronologically (oldest first)
  */
-function aggregateByWeek(rows) {
+function aggregateByPeriod(rows) {
   const map = new Map();
   for (const r of rows) {
-    let w = map.get(r.week);
-    if (!w) { w = { week: r.week, ordersNoOndemand: 0, nc: 0, ordersOndemand: 0 }; map.set(r.week, w); }
+    let w = map.get(r.period);
+    if (!w) { w = { period: r.period, ordersNoOndemand: 0, nc: 0, ordersOndemand: 0, ordersPrime: 0 }; map.set(r.period, w); }
     w.ordersNoOndemand += r.ordersNoOndemand;
     w.nc += r.nc;
     w.ordersOndemand += r.ordersOndemand;
+    w.ordersPrime += r.ordersPrime;
   }
   return Array.from(map.values()).map(w => {
     w.totalOrders = w.ordersNoOndemand + w.ordersOndemand;
     w.ncPenetration = calcNCPenetration(w.nc, w.totalOrders);
+    w.primePenetration = calcPrimePenetration(w.ordersPrime, w.ordersNoOndemand);
     return w;
-  }).sort((a, b) => a.week.localeCompare(b.week));
+  }).sort((a, b) => a.period.localeCompare(b.period));
 }
 
+// Backward-compat alias used in YoY builder
+function aggregateByWeek(rows) { return aggregateByPeriod(rows); }
+
 /**
- * Build a lookup map of week -> metric value (for YoY).
- * @param {WeekAgg[]} weeks
+ * Build a lookup map of period -> metric value (for YoY).
+ * @param {PeriodAgg[]} periods
  * @param {string} metric - property name
  * @returns {Map<string, number>}
  */
-function buildWeekMap(weeks, metric) {
+function buildWeekMap(periods, metric) {
   const m = new Map();
-  for (const w of weeks) m.set(w.week, w[metric]);
+  for (const w of periods) m.set(w.period, w[metric]);
   return m;
 }
 
 // ═══════════════════════════════════════════════════════════════
 //  APP STATE
 // ═══════════════════════════════════════════════════════════════
-let rawData = [];          // SheetRow[] — all parsed rows
+let rawDataAll = [];       // SheetRow[] — ALL parsed rows (all granularities)
+let rawData = [];          // SheetRow[] — filtered by active granularity
 let allCountries = [];     // sorted unique country codes
 let selectedCountries = []; // [] means ALL
-let rangeWeeks = 13;       // 0 = all
-let weeklyData = [];       // WeekAgg[] — current filtered + aggregated
-let allWeeklyData = [];    // WeekAgg[] — full history for YoY lookups
+let activeGranularity = 'week'; // 'day'|'week'|'month'
+let rangePeriods = 13;     // 0 = all
+let weeklyData = [];       // PeriodAgg[] — current filtered + aggregated
+let allWeeklyData = [];    // PeriodAgg[] — full history for YoY lookups
 let tableRows = [];        // for table display
 let filteredTableRows = [];
 let sortCol = -1, sortAsc = true;
@@ -514,12 +581,13 @@ async function loadData() {
 
     lastFetchedHeaders = data.headers;
     lastFetchedRows = data.rows;
-    rawData = parseSheetData(data.headers, data.rows);
-    allCountries = [...new Set(rawData.map(r => r.country))].sort();
+    rawDataAll = parseSheetData(data.headers, data.rows);
+    allCountries = [...new Set(rawDataAll.map(r => r.country))].sort();
 
-    // Init country filter from URL or default
+    // Init filters from URL or defaults
     initCountryFilterFromURL();
     renderCountryDropdown();
+    applyGranularity();
     applyFilters();
 
     document.getElementById('dashTitle').textContent = 'Africa Weekly Orders Dashboard';
@@ -533,6 +601,10 @@ async function loadData() {
   }
 }
 
+function applyGranularity() {
+  rawData = rawDataAll.filter(r => r.granularity === activeGranularity);
+}
+
 function applyFilters() {
   // Filter by country
   const filtered = selectedCountries.length
@@ -540,18 +612,18 @@ function applyFilters() {
     : rawData;
 
   // Full history aggregated (for YoY lookups, no date range limit)
-  allWeeklyData = aggregateByWeek(filtered);
+  allWeeklyData = aggregateByPeriod(filtered);
 
   // Apply date range
   let ranged = allWeeklyData;
-  if (rangeWeeks > 0 && allWeeklyData.length > rangeWeeks) {
-    ranged = allWeeklyData.slice(-rangeWeeks);
+  if (rangePeriods > 0 && allWeeklyData.length > rangePeriods) {
+    ranged = allWeeklyData.slice(-rangePeriods);
   }
   weeklyData = ranged;
 
   // Table rows = filtered raw data within date range
-  const minWeek = weeklyData.length ? weeklyData[0].week : '';
-  tableRows = filtered.filter(r => r.week >= minWeek).sort((a, b) => b.week.localeCompare(a.week) || a.country.localeCompare(b.country));
+  const minPeriod = weeklyData.length ? weeklyData[0].period : '';
+  tableRows = filtered.filter(r => r.period >= minPeriod).sort((a, b) => b.period.localeCompare(a.period) || a.country.localeCompare(b.country));
   filteredTableRows = [...tableRows];
 
   document.getElementById('stateMsg').style.display = 'none';
@@ -568,8 +640,8 @@ function renderAll() {
   const sub = selectedCountries.length
     ? selectedCountries.map(c => COUNTRY_NAMES[c] || c).join(', ')
     : 'All Countries';
-  const latest = weeklyData.length ? weeklyData[weeklyData.length - 1].week : '';
-  document.getElementById('dashSubtitle').textContent = `${sub} · Latest: ${formatWeekLabel(latest)}`;
+  const latest = weeklyData.length ? weeklyData[weeklyData.length - 1].period : '';
+  document.getElementById('dashSubtitle').textContent = `${sub} · ${GRAN_LABELS[activeGranularity]} · Latest: ${formatPeriodLabel(latest)}`;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -630,12 +702,24 @@ document.addEventListener('click', e => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+//  GRANULARITY
+// ═══════════════════════════════════════════════════════════════
+function setGranularity(gran) {
+  activeGranularity = gran;
+  document.querySelectorAll('#granPills .range-pill').forEach(p => {
+    p.classList.toggle('active', p.dataset.gran === gran);
+  });
+  applyGranularity();
+  applyFilters();
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  DATE RANGE
 // ═══════════════════════════════════════════════════════════════
-function setRange(weeks) {
-  rangeWeeks = weeks;
-  document.querySelectorAll('.range-pill').forEach(p => {
-    p.classList.toggle('active', parseInt(p.dataset.weeks) === weeks);
+function setRange(periods) {
+  rangePeriods = periods;
+  document.querySelectorAll('#rangePills .range-pill').forEach(p => {
+    p.classList.toggle('active', parseInt(p.dataset.periods) === periods);
   });
   applyFilters();
 }
@@ -646,7 +730,8 @@ function setRange(weeks) {
 function syncURL() {
   const params = new URLSearchParams();
   if (selectedCountries.length) params.set('country', selectedCountries.join(','));
-  if (rangeWeeks !== 13) params.set('range', rangeWeeks);
+  if (activeGranularity !== 'week') params.set('gran', activeGranularity);
+  if (rangePeriods !== 13) params.set('range', rangePeriods);
   const qs = params.toString();
   const url = qs ? `${location.pathname}?${qs}` : location.pathname;
   history.replaceState(null, '', url);
@@ -657,11 +742,18 @@ function initCountryFilterFromURL() {
   const c = params.get('country');
   if (c) selectedCountries = c.split(',').filter(x => allCountries.includes(x));
   else selectedCountries = [];
+  const g = params.get('gran');
+  if (g && ['day','week','month'].includes(g)) {
+    activeGranularity = g;
+    document.querySelectorAll('#granPills .range-pill').forEach(p => {
+      p.classList.toggle('active', p.dataset.gran === activeGranularity);
+    });
+  }
   const r = params.get('range');
   if (r != null) {
-    rangeWeeks = parseInt(r) || 0;
-    document.querySelectorAll('.range-pill').forEach(p => {
-      p.classList.toggle('active', parseInt(p.dataset.weeks) === rangeWeeks);
+    rangePeriods = parseInt(r) || 0;
+    document.querySelectorAll('#rangePills .range-pill').forEach(p => {
+      p.classList.toggle('active', parseInt(p.dataset.periods) === rangePeriods);
     });
   }
 }
@@ -674,47 +766,50 @@ function renderKPIs() {
   if (!weeklyData.length) { grid.innerHTML = ''; return; }
 
   const metrics = [
-    { key: 'totalOrders',       label: 'Total Orders',     fmt: fmtInt,  pct: false },
-    { key: 'nc',                label: 'New Customers',    fmt: fmtInt,  pct: false },
-    { key: 'ncPenetration',     label: 'NC Penetration',   fmt: fmtPct,  pct: true  },
-    { key: 'ordersOndemand',    label: 'On-Demand Orders', fmt: fmtInt,  pct: false },
+    { key: 'totalOrders',       label: 'Total Orders',        fmt: fmtInt,  pct: false },
+    { key: 'nc',                label: 'New Customers',       fmt: fmtInt,  pct: false },
+    { key: 'ncPenetration',     label: 'NC Penetration',      fmt: fmtPct,  pct: true  },
+    { key: 'primePenetration',  label: 'Prime Penetration',   fmt: fmtPct,  pct: true  },
+    { key: 'ordersOndemand',    label: 'On-Demand Orders',    fmt: fmtInt,  pct: false },
   ];
 
   const latest = weeklyData[weeklyData.length - 1];
   const prev   = weeklyData.length > 1 ? weeklyData[weeklyData.length - 2] : null;
-  const partial = isCurrentWeek(latest.week);
+  const partial = isCurrentPeriod(latest.period);
 
   // Build full-history week maps for YoY
   const fullMaps = {};
   for (const m of metrics) fullMaps[m.key] = buildWeekMap(allWeeklyData, m.key);
 
+  const deltaLabel = activeGranularity === 'day' ? 'DoD' : activeGranularity === 'month' ? 'MoM' : 'WoW';
   grid.innerHTML = metrics.map(m => {
     const val = latest[m.key];
     const wow = prev ? calcWoW(val, prev[m.key]) : null;
-    const yoy = calcYoY(latest.week, val, fullMaps[m.key]);
+    const yoy = calcYoY(latest.period, val, fullMaps[m.key]);
     const vals = weeklyData.map(w => w[m.key]);
-    const labels = weeklyData.map(w => w.week);
+    const labels = weeklyData.map(w => w.period);
     const streak = calcStreak(vals);
     const bw = calcBestWorst(vals, labels);
     const sparkVals = vals.slice(-8);
 
+    const periodWord = activeGranularity === 'day' ? 'day' : activeGranularity === 'month' ? 'month' : 'week';
     return `<div class="kpi-card">
       <div class="kpi-top">
         <div class="kpi-label">${m.label}</div>
-        ${partial ? '<span class="kpi-partial">Partial week</span>' : ''}
+        ${partial ? `<span class="kpi-partial">Partial ${periodWord}</span>` : ''}
       </div>
       <div class="kpi-value-row">
         <div class="kpi-value">${m.fmt(val)}</div>
         <div class="kpi-deltas">
-          ${renderDelta(wow, 'WoW')}
+          ${renderDelta(wow, deltaLabel)}
           ${renderDelta(yoy.pct, 'YoY')}
         </div>
       </div>
-      ${streak.count > 0 ? `<div class="kpi-streak">${streak.direction === 'up' ? '&#9650;' : '&#9660;'} ${streak.count} week${streak.count > 1 ? 's' : ''} in a row</div>` : ''}
+      ${streak.count > 0 ? `<div class="kpi-streak">${streak.direction === 'up' ? '&#9650;' : '&#9660;'} ${streak.count} ${periodWord}${streak.count > 1 ? 's' : ''} in a row</div>` : ''}
       <div class="kpi-sparkline">${renderSparkline(sparkVals)}</div>
       ${bw ? `<div class="kpi-best-worst">
-        <span class="bw-best">Best: ${m.fmt(bw.best.val)} (${formatWeekLabel(bw.best.label)})</span>
-        <span class="bw-worst">Worst: ${m.fmt(bw.worst.val)} (${formatWeekLabel(bw.worst.label)})</span>
+        <span class="bw-best">Best: ${m.fmt(bw.best.val)} (${formatPeriodLabel(bw.best.label)})</span>
+        <span class="bw-worst">Worst: ${m.fmt(bw.worst.val)} (${formatPeriodLabel(bw.worst.label)})</span>
       </div>` : ''}
     </div>`;
   }).join('');
@@ -752,13 +847,14 @@ function renderCharts() {
   charts = {};
   if (weeklyData.length < 2) { grid.innerHTML = ''; return; }
 
-  const labels = weeklyData.map(w => formatWeekLabel(w.week));
-  const lastIsPartial = isCurrentWeek(weeklyData[weeklyData.length - 1].week);
+  const labels = weeklyData.map(w => formatPeriodLabel(w.period));
+  const lastIsPartial = isCurrentPeriod(weeklyData[weeklyData.length - 1].period);
 
   const defs = [
     { id: 'chartOrders', title: 'Total Orders', key: 'totalOrders', color: CHART_COLORS.orders, fmt: fmtInt },
     { id: 'chartNC',     title: 'New Customers', key: 'nc',         color: CHART_COLORS.nc,     fmt: fmtInt },
     { id: 'chartNCP',    title: 'NC Penetration (%)', key: 'ncPenetration', color: CHART_COLORS.ncp, fmt: fmtPct },
+    { id: 'chartPrime',  title: 'Prime Penetration (%)', key: 'primePenetration', color: CHART_COLORS.prime, fmt: fmtPct },
     { id: 'chartOD',     title: 'On-Demand Orders', key: 'ordersOndemand', color: CHART_COLORS.ondemand, fmt: fmtInt },
   ];
 
@@ -852,7 +948,7 @@ function renderCharts() {
             grid: { color: 'rgba(0,0,0,.4)' },
           },
           y: {
-            ticks: { color: '#6b7280', font: { size: 11 }, callback: v => d.key === 'ncPenetration' ? v.toFixed(1) + '%' : fmtShort(v) },
+            ticks: { color: '#6b7280', font: { size: 11 }, callback: v => (d.key === 'ncPenetration' || d.key === 'primePenetration') ? v.toFixed(1) + '%' : fmtShort(v) },
             grid: { color: 'rgba(0,0,0,.4)' },
           },
         },
@@ -876,12 +972,12 @@ function buildYoYSeries(metric) {
   const filtered = selectedCountries.length
     ? rawData.filter(r => selectedCountries.includes(r.country))
     : rawData;
-  const weekly = aggregateByWeek(filtered); // full history, sorted asc
+  const weekly = aggregateByPeriod(filtered); // full history, sorted asc
 
   // Group values by isoYear -> isoWeek -> value
   const byYear = {}; // { '2023': { 1: val, 2: val, ... }, ... }
   for (const w of weekly) {
-    const d = new Date(w.week + 'T00:00:00');
+    const d = new Date(w.period + 'T00:00:00');
     const yr = String(getISOYear(d));
     const wk = getISOWeek(d);
     if (!byYear[yr]) byYear[yr] = {};
@@ -907,10 +1003,17 @@ function buildYoYSeries(metric) {
 
 function renderYoYCharts() {
   const grid = document.getElementById('yoyChartGrid');
+  const sectionTitle = document.getElementById('yoySectionTitle');
   // Destroy previous YoY charts
   ['yoyOrders', 'yoyNC'].forEach(id => { if (charts[id]) { charts[id].destroy(); delete charts[id]; } });
 
-  if (allWeeklyData.length < 2) { grid.innerHTML = ''; return; }
+  // YoY charts only make sense for weekly/monthly
+  if (activeGranularity === 'day' || allWeeklyData.length < 2) {
+    grid.innerHTML = '';
+    sectionTitle.style.display = activeGranularity === 'day' ? 'none' : '';
+    return;
+  }
+  sectionTitle.style.display = '';
 
   const defs = [
     { id: 'yoyOrders', title: 'Orders YoY Comparison (excl. On-Demand)', metric: 'ordersNoOndemand', fmt: fmtInt },
@@ -980,36 +1083,42 @@ function renderYoYCharts() {
  */
 function buildCountryWeeklyData(countryCode) {
   const countryRows = rawData.filter(r => r.country === countryCode);
-  // Aggregate by week (should be 1 row per week per country, but be safe)
-  const byWeek = new Map();
+  const byPeriod = new Map();
   for (const r of countryRows) {
-    let w = byWeek.get(r.week);
-    if (!w) { w = { week: r.week, orders: 0, nc: 0 }; byWeek.set(r.week, w); }
+    let w = byPeriod.get(r.period);
+    if (!w) { w = { period: r.period, orders: 0, nc: 0 }; byPeriod.set(r.period, w); }
     w.orders += r.ordersNoOndemand;
     w.nc += r.nc;
   }
-  const weeks = Array.from(byWeek.values()).sort((a, b) => a.week.localeCompare(b.week));
+  const weeks = Array.from(byPeriod.values()).sort((a, b) => a.period.localeCompare(b.period));
 
-  // Build lookup by ISO week for YoY
-  const ordersByIsoKey = {}; // 'YYYY-WW' -> orders
+  // Build lookup by ISO week (or month) for YoY
+  const ordersByIsoKey = {};
   const ncByIsoKey = {};
   for (const w of weeks) {
-    const d = new Date(w.week + 'T00:00:00');
-    const key = `${getISOYear(d)}-${getISOWeek(d)}`;
+    const d = new Date(w.period + 'T00:00:00');
+    const key = activeGranularity === 'month'
+      ? `${d.getFullYear()}-${d.getMonth()}`
+      : activeGranularity === 'day'
+        ? w.period
+        : `${getISOYear(d)}-${getISOWeek(d)}`;
     ordersByIsoKey[key] = w.orders;
     ncByIsoKey[key] = w.nc;
   }
 
-  // Compute WoW and YoY
   const result = weeks.map((w, i) => {
-    const d = new Date(w.week + 'T00:00:00');
+    const d = new Date(w.period + 'T00:00:00');
     const isoWk = getISOWeek(d);
     const isoYr = getISOYear(d);
     const prev = i > 0 ? weeks[i - 1] : null;
-    const priorYearKey = `${isoYr - 1}-${isoWk}`;
+    const priorYearKey = activeGranularity === 'month'
+      ? `${d.getFullYear() - 1}-${d.getMonth()}`
+      : activeGranularity === 'day'
+        ? (() => { const pd = new Date(d); pd.setFullYear(pd.getFullYear() - 1); return pd.toISOString().slice(0,10); })()
+        : `${isoYr - 1}-${isoWk}`;
 
     return {
-      week: w.week,
+      period: w.period,
       isoWk,
       isoYr,
       orders: w.orders,
@@ -1030,13 +1139,11 @@ function renderCountryTables() {
 
   if (!countries.length || !rawData.length) { grid.innerHTML = ''; return; }
 
-  // Determine date range cutoff
-  const minWeek = weeklyData.length ? weeklyData[0].week : '';
+  const minPeriod = weeklyData.length ? weeklyData[0].period : '';
 
   grid.innerHTML = countries.map(code => {
     let rows = buildCountryWeeklyData(code);
-    // Apply date range
-    if (minWeek) rows = rows.filter(r => r.week >= minWeek);
+    if (minPeriod) rows = rows.filter(r => r.period >= minPeriod);
     // Show newest first
     rows = rows.slice().reverse();
 
@@ -1060,7 +1167,7 @@ function renderCountryTables() {
             </tr></thead>
             <tbody>
               ${rows.map(r => `<tr>
-                <td style="text-align:left">${formatWeekLabel(r.week)}${isCurrentWeek(r.week) ? ' <span class="chip chip-red" style="font-size:9px">partial</span>' : ''}</td>
+                <td style="text-align:left">${formatPeriodLabel(r.period)}${isCurrentPeriod(r.period) ? ' <span class="chip chip-red" style="font-size:9px">partial</span>' : ''}</td>
                 <td>${r.orders.toLocaleString()}</td>
                 <td>${r.nc.toLocaleString()}</td>
                 <td>${fmtDeltaCell(r.ordersWoW)}</td>
@@ -1097,8 +1204,8 @@ function renderTable() {
   document.getElementById('tableTitle').textContent = `Detail Data · ${tableRows.length} rows`;
   document.getElementById('searchInput').value = '';
 
-  const cols = ['week', 'country', 'ordersNoOndemand', 'ordersOndemand', 'totalOrders', 'nc', 'ncPenetration'];
-  const colLabels = ['Week', 'Country', 'Orders', 'On-Demand', 'Total Orders', 'New Customers', 'NC Penetration %'];
+  const cols = ['period', 'country', 'ordersNoOndemand', 'ordersOndemand', 'totalOrders', 'nc', 'ordersPrime', 'ncPenetration', 'primePenetration'];
+  const colLabels = ['Period', 'Country', 'Orders', 'On-Demand', 'Total Orders', 'New Customers', 'Prime Orders', 'NC Pen. %', 'Prime Pen. %'];
 
   const thead = document.getElementById('tableHead');
   thead.innerHTML = '<tr>' + colLabels.map((h, i) =>
@@ -1112,7 +1219,7 @@ function renderTable() {
 }
 
 function renderTablePage(cols) {
-  cols = cols || ['week', 'country', 'ordersNoOndemand', 'ordersOndemand', 'totalOrders', 'nc', 'ncPenetration'];
+  cols = cols || ['period', 'country', 'ordersNoOndemand', 'ordersOndemand', 'totalOrders', 'nc', 'ordersPrime', 'ncPenetration', 'primePenetration'];
   const tbody = document.getElementById('tableBody');
   const start = (currentPage - 1) * PAGE_SIZE;
   const page = filteredTableRows.slice(start, start + PAGE_SIZE);
@@ -1121,8 +1228,8 @@ function renderTablePage(cols) {
     return '<tr>' + cols.map(col => {
       let v = row[col];
       if (col === 'country') return `<td>${COUNTRY_NAMES[v] || v} (${v})</td>`;
-      if (col === 'week') return `<td>${formatWeekLabel(v)}${isCurrentWeek(v) ? ' <span class="chip chip-red" style="font-size:9px">partial</span>' : ''}</td>`;
-      if (col === 'ncPenetration') return `<td class="num">${v.toFixed(2)}%</td>`;
+      if (col === 'period') return `<td>${formatPeriodLabel(v)}${isCurrentPeriod(v) ? ' <span class="chip chip-red" style="font-size:9px">partial</span>' : ''}</td>`;
+      if (col === 'ncPenetration' || col === 'primePenetration') return `<td class="num">${v.toFixed(2)}%</td>`;
       if (typeof v === 'number') return `<td class="num">${v.toLocaleString()}</td>`;
       return `<td>${esc(String(v))}</td>`;
     }).join('') + '</tr>';
@@ -1142,7 +1249,7 @@ function renderTablePage(cols) {
 }
 
 function sortTableBy(ci) {
-  const cols = ['week', 'country', 'ordersNoOndemand', 'ordersOndemand', 'totalOrders', 'nc', 'ncPenetration'];
+  const cols = ['period', 'country', 'ordersNoOndemand', 'ordersOndemand', 'totalOrders', 'nc', 'ordersPrime', 'ncPenetration', 'primePenetration'];
   const key = cols[ci];
   if (sortCol === ci) sortAsc = !sortAsc; else { sortCol = ci; sortAsc = true; }
   filteredTableRows.sort((a, b) => {
@@ -1177,13 +1284,13 @@ function goPage(p) {
 //  CSV EXPORT (scoped to current filters)
 // ═══════════════════════════════════════════════════════════════
 function exportCSV() {
-  const cols = ['week', 'country', 'ordersNoOndemand', 'ordersOndemand', 'totalOrders', 'nc', 'ncPenetration'];
-  const headers = ['Week', 'Country', 'Orders (No OnDemand)', 'Orders (OnDemand)', 'Total Orders', 'New Customers', 'NC Penetration %'];
+  const cols = ['period', 'country', 'ordersNoOndemand', 'ordersOndemand', 'totalOrders', 'nc', 'ordersPrime', 'ncPenetration', 'primePenetration'];
+  const headers = ['Period', 'Country', 'Orders', 'On-Demand', 'Total Orders', 'New Customers', 'Prime Orders', 'NC Penetration %', 'Prime Penetration %'];
   const lines = [headers.join(',')];
   for (const r of filteredTableRows) {
     lines.push(cols.map(c => {
       const v = r[c];
-      if (typeof v === 'number' && c === 'ncPenetration') return v.toFixed(2);
+      if (typeof v === 'number' && (c === 'ncPenetration' || c === 'primePenetration')) return v.toFixed(2);
       return typeof v === 'string' && v.includes(',') ? `"${v}"` : v;
     }).join(','));
   }
@@ -1191,7 +1298,7 @@ function exportCSV() {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   const suffix = selectedCountries.length ? `_${selectedCountries.join('-')}` : '_all';
-  a.download = `scorecard${suffix}_${rangeWeeks || 'all'}w.csv`;
+  a.download = `scorecard${suffix}_${activeGranularity}_${rangePeriods || 'all'}.csv`;
   a.click();
 }
 
@@ -1211,13 +1318,21 @@ function fmtShort(n) {
   if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(1) + 'K';
   return n.toLocaleString();
 }
-function formatWeekLabel(dateStr) {
+function formatPeriodLabel(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr + 'T00:00:00');
-  const wk = getISOWeek(d);
-  const yr = getISOYear(d);
-  return `W${String(wk).padStart(2, '0')} ${yr}`;
+  if (activeGranularity === 'day') {
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  } else if (activeGranularity === 'month') {
+    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  } else {
+    const wk = getISOWeek(d);
+    const yr = getISOYear(d);
+    return `W${String(wk).padStart(2, '0')} ${yr}`;
+  }
 }
+// Backward compat alias
+function formatWeekLabel(s) { return formatPeriodLabel(s); }
 function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
