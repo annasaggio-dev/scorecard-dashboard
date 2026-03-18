@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Scorecard Dashboard</title>
+  <title>Africa Weekly Scorecard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     :root {
@@ -16,279 +16,128 @@
       --green: #22c55e;
       --red: #ef4444;
       --yellow: #f59e0b;
+      --orange: #f97316;
       --text: #e8eaf0;
       --muted: #7b82a0;
       --radius: 12px;
     }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; min-height: 100vh; padding-bottom: 40px; }
 
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      min-height: 100vh;
-    }
+    /* ── Progress bar ── */
+    .progress-bar { position: fixed; top: 0; left: 0; height: 3px; background: var(--accent); transition: width .3s; z-index: 300; }
 
     /* ── Header ── */
-    .header {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 16px 28px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-    .header-left { display: flex; align-items: center; gap: 12px; }
-    .logo {
-      width: 36px; height: 36px;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 700; font-size: 18px;
-    }
-    .header h1 { font-size: 18px; font-weight: 600; }
-    .header-subtitle { font-size: 13px; color: var(--muted); }
+    .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 200; flex-wrap: wrap; gap: 10px; }
+    .header-left { display: flex; align-items: center; gap: 10px; }
+    .logo { width: 34px; height: 34px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; flex-shrink: 0; }
+    .header h1 { font-size: 16px; font-weight: 600; }
+    .header-sub { font-size: 12px; color: var(--muted); }
+    .header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .refresh-badge { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .btn { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 7px 14px; font-size: 12px; cursor: pointer; transition: opacity .15s; white-space: nowrap; }
+    .btn:hover { opacity: .85; }
+    .btn-sm { padding: 5px 10px; }
+    .btn-ghost { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
 
-    .header-right { display: flex; align-items: center; gap: 16px; }
-    .refresh-badge {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 6px 14px;
-      font-size: 13px;
-      color: var(--muted);
-      display: flex; align-items: center; gap: 6px;
-    }
-    .dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: var(--green);
-      animation: pulse 2s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
+    /* ── Filter bar ── */
+    .filter-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .filter-group { display: flex; align-items: center; gap: 8px; }
+    .filter-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; font-weight: 600; }
 
-    .btn {
-      background: var(--accent);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      padding: 8px 16px;
-      font-size: 13px;
-      cursor: pointer;
-      transition: opacity .15s;
-    }
-    .btn:hover { opacity: 0.85; }
-    .btn-sm { padding: 5px 12px; font-size: 12px; }
-    .btn-ghost {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-    }
+    /* Multi-select dropdown */
+    .multi-select { position: relative; }
+    .ms-trigger { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 13px; color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 6px; min-width: 160px; }
+    .ms-trigger:hover { border-color: var(--accent); }
+    .ms-trigger::after { content: ''; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid var(--muted); margin-left: auto; }
+    .ms-dropdown { position: absolute; top: calc(100% + 4px); left: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px; min-width: 200px; z-index: 150; display: none; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+    .ms-dropdown.open { display: block; }
+    .ms-option { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+    .ms-option:hover { background: var(--surface2); }
+    .ms-option input { accent-color: var(--accent); }
+    .ms-option.all-opt { border-bottom: 1px solid var(--border); margin-bottom: 4px; padding-bottom: 10px; font-weight: 600; }
+
+    /* Date range pills */
+    .range-pills { display: flex; gap: 4px; }
+    .range-pill { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer; color: var(--muted); transition: all .15s; }
+    .range-pill:hover { color: var(--text); border-color: var(--accent); }
+    .range-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
     /* ── Layout ── */
-    .container { max-width: 1600px; margin: 0 auto; padding: 24px 28px; }
-
-    /* ── Sheet tabs ── */
-    .sheet-tabs {
-      display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px;
-    }
-    .sheet-tab {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 7px 16px;
-      font-size: 13px;
-      cursor: pointer;
-      color: var(--muted);
-      transition: all .15s;
-    }
-    .sheet-tab:hover { color: var(--text); border-color: var(--accent); }
-    .sheet-tab.active {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: white;
-    }
+    .container { max-width: 1600px; margin: 0 auto; padding: 20px 24px; }
 
     /* ── KPI Cards ── */
-    .kpi-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 16px;
-      margin-bottom: 28px;
-    }
-    .kpi-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px;
-      transition: border-color .15s;
-    }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-bottom: 24px; }
+    .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; transition: border-color .15s; position: relative; }
     .kpi-card:hover { border-color: var(--accent); }
-    .kpi-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
-    .kpi-value { font-size: 28px; font-weight: 700; }
-    .kpi-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
-    .kpi-trend { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; margin-top: 6px; }
-    .kpi-trend.up { color: var(--green); }
-    .kpi-trend.down { color: var(--red); }
+    .kpi-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .kpi-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; font-weight: 600; }
+    .kpi-partial { background: rgba(245,158,11,.15); color: var(--yellow); font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
+    .kpi-value-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+    .kpi-value { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .kpi-deltas { display: flex; gap: 8px; flex-wrap: wrap; }
+    .kpi-delta { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 10px; display: inline-flex; align-items: center; gap: 3px; }
+    .kpi-delta.up { background: rgba(34,197,94,.12); color: var(--green); }
+    .kpi-delta.down { background: rgba(239,68,68,.12); color: var(--red); }
+    .kpi-delta.flat { background: rgba(123,130,160,.12); color: var(--muted); }
+    .kpi-streak { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .kpi-sparkline { margin-top: 8px; }
+    .kpi-sparkline svg { width: 100%; height: 32px; }
+    .kpi-best-worst { font-size: 10px; color: var(--muted); margin-top: 6px; display: flex; gap: 12px; }
+    .bw-best { color: var(--green); }
+    .bw-worst { color: var(--red); }
+
+    /* ── Charts ── */
+    .chart-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+    .chart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .chart-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
+    .chart-summary { font-size: 11px; color: var(--muted); display: flex; gap: 14px; }
+    .chart-summary .best { color: var(--green); }
+    .chart-summary .worst { color: var(--red); }
+    .chart-wrap { position: relative; height: 240px; }
+    @media(max-width:600px) { .chart-grid { grid-template-columns: 1fr; } .chart-wrap { height: 200px; } .kpi-grid { grid-template-columns: 1fr 1fr; } }
+    @media(max-width:400px) { .kpi-grid { grid-template-columns: 1fr; } }
 
     /* ── Table ── */
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-      margin-bottom: 28px;
-    }
-    .card-header {
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .card-title { font-size: 15px; font-weight: 600; }
-
-    .search-input {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 7px 12px;
-      color: var(--text);
-      font-size: 13px;
-      width: 220px;
-      outline: none;
-    }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 24px; }
+    .card-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+    .card-title { font-size: 14px; font-weight: 600; }
+    .search-input { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 11px; color: var(--text); font-size: 13px; width: 200px; outline: none; }
     .search-input:focus { border-color: var(--accent); }
     .search-input::placeholder { color: var(--muted); }
-
     .table-wrap { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
     thead { background: var(--surface2); }
-    th {
-      padding: 12px 16px;
-      text-align: left;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: .4px;
-      white-space: nowrap;
-      cursor: pointer;
-      user-select: none;
-    }
+    th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; cursor: pointer; user-select: none; }
     th:hover { color: var(--text); }
-    th .sort-icon { opacity: 0.4; margin-left: 4px; }
+    th .sort-icon { opacity: .4; margin-left: 3px; }
     th.sorted .sort-icon { opacity: 1; color: var(--accent); }
-
-    td {
-      padding: 11px 16px;
-      border-top: 1px solid var(--border);
-      white-space: nowrap;
-      max-width: 300px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+    td { padding: 9px 14px; border-top: 1px solid var(--border); white-space: nowrap; }
     tr:hover td { background: var(--surface2); }
-
-    /* status chips */
-    .chip {
-      display: inline-block;
-      padding: 3px 10px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 600;
-    }
-    .chip-green { background: rgba(34,197,94,.15); color: var(--green); }
-    .chip-red   { background: rgba(239,68,68,.15);  color: var(--red); }
-    .chip-yellow{ background: rgba(245,158,11,.15); color: var(--yellow); }
-    .chip-blue  { background: rgba(79,142,247,.15); color: var(--accent); }
-
-    /* numeric cells */
     .num { font-variant-numeric: tabular-nums; text-align: right; }
-
-    /* pagination */
-    .pagination {
-      padding: 14px 20px;
-      border-top: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 13px;
-      color: var(--muted);
-    }
-    .page-btns { display: flex; gap: 6px; }
-    .page-btn {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      color: var(--text);
-      border-radius: 6px;
-      padding: 5px 10px;
-      cursor: pointer;
-      font-size: 12px;
-    }
+    .pagination { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--muted); }
+    .page-btns { display: flex; gap: 4px; }
+    .page-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 9px; cursor: pointer; font-size: 11px; }
     .page-btn:disabled { opacity: .4; cursor: default; }
-    .page-btn.current { background: var(--accent); border-color: var(--accent); color: white; }
-
-    /* ── Chart grid ── */
-    .chart-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
-      gap: 20px;
-      margin-bottom: 28px;
-    }
-    .chart-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px;
-    }
-    .chart-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; color: var(--muted); }
-    .chart-wrap { position: relative; height: 220px; }
+    .page-btn.current { background: var(--accent); border-color: var(--accent); color: #fff; }
 
     /* ── Status bar ── */
-    .statusbar {
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      background: var(--surface);
-      border-top: 1px solid var(--border);
-      padding: 8px 28px;
-      font-size: 12px;
-      color: var(--muted);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
+    .statusbar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); padding: 6px 24px; font-size: 11px; color: var(--muted); display: flex; align-items: center; justify-content: space-between; z-index: 100; }
 
-    /* ── Error / Loading ── */
-    .center-msg {
-      text-align: center; padding: 80px 20px; color: var(--muted);
-    }
-    .center-msg .icon { font-size: 48px; margin-bottom: 12px; }
+    /* ── Loading / Error ── */
+    .center-msg { text-align: center; padding: 80px 20px; color: var(--muted); }
     .center-msg h2 { font-size: 18px; color: var(--text); margin-bottom: 8px; }
     .center-msg p { font-size: 14px; max-width: 400px; margin: 0 auto 20px; }
-
-    .spinner {
-      width: 40px; height: 40px;
-      border: 3px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin .8s linear infinite;
-      margin: 0 auto 16px;
-    }
+    .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 16px; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .progress-bar {
-      position: fixed; top: 0; left: 0;
-      height: 3px; background: var(--accent);
-      transition: width .3s;
-      z-index: 200;
-    }
+    /* ── Chip ── */
+    .chip { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    .chip-green { background: rgba(34,197,94,.12); color: var(--green); }
+    .chip-red { background: rgba(239,68,68,.12); color: var(--red); }
   </style>
 </head>
 <body>
@@ -298,54 +147,59 @@
 <!-- Header -->
 <div class="header">
   <div class="header-left">
-    <div class="logo">S</div>
+    <div class="logo">A</div>
     <div>
-      <div class="header h1" id="dashTitle">Scorecard Dashboard</div>
-      <div class="header-subtitle" id="dashSubtitle">Loading...</div>
+      <h1 id="dashTitle">Africa Weekly Scorecard</h1>
+      <div class="header-sub" id="dashSubtitle">Loading...</div>
     </div>
   </div>
   <div class="header-right">
-    <div class="refresh-badge">
-      <span class="dot" id="liveIndicator"></span>
-      <span id="nextRefreshLabel">Refreshing in 30s</span>
+    <div class="refresh-badge"><span class="dot"></span><span id="nextRefreshLabel">Refreshing in 60s</span></div>
+    <button class="btn btn-ghost btn-sm" onclick="loadData()">Refresh Now</button>
+  </div>
+</div>
+
+<!-- Filter bar -->
+<div class="filter-bar">
+  <div class="filter-group">
+    <span class="filter-label">Country</span>
+    <div class="multi-select" id="countryFilter">
+      <div class="ms-trigger" id="countryTrigger" onclick="toggleDropdown()">All Countries</div>
+      <div class="ms-dropdown" id="countryDropdown"></div>
     </div>
-    <button class="btn btn-ghost btn-sm" onclick="loadData()">↻ Refresh Now</button>
+  </div>
+  <div class="filter-group">
+    <span class="filter-label">Range</span>
+    <div class="range-pills" id="rangePills">
+      <div class="range-pill" data-weeks="4" onclick="setRange(4)">4W</div>
+      <div class="range-pill active" data-weeks="13" onclick="setRange(13)">13W</div>
+      <div class="range-pill" data-weeks="26" onclick="setRange(26)">26W</div>
+      <div class="range-pill" data-weeks="52" onclick="setRange(52)">52W</div>
+      <div class="range-pill" data-weeks="0" onclick="setRange(0)">All</div>
+    </div>
+  </div>
+  <div style="margin-left:auto">
+    <button class="btn btn-ghost btn-sm" onclick="exportCSV()">Download CSV</button>
   </div>
 </div>
 
 <!-- Main content -->
 <div class="container">
-  <!-- Sheet tabs -->
-  <div class="sheet-tabs" id="sheetTabs"></div>
-
-  <!-- KPI cards -->
   <div class="kpi-grid" id="kpiGrid"></div>
-
-  <!-- Charts -->
   <div class="chart-grid" id="chartGrid"></div>
 
   <!-- Data table -->
   <div class="card" id="tableCard" style="display:none">
     <div class="card-header">
       <span class="card-title" id="tableTitle">Data</span>
-      <div style="display:flex;gap:10px;align-items:center">
-        <input class="search-input" id="searchInput" placeholder="Search..." oninput="filterTable()" />
-        <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ CSV</button>
-      </div>
+      <input class="search-input" id="searchInput" placeholder="Search..." oninput="filterTable()" />
     </div>
     <div class="table-wrap">
-      <table id="dataTable">
-        <thead id="tableHead"></thead>
-        <tbody id="tableBody"></tbody>
-      </table>
+      <table><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table>
     </div>
-    <div class="pagination">
-      <span id="paginationInfo"></span>
-      <div class="page-btns" id="pageBtns"></div>
-    </div>
+    <div class="pagination"><span id="paginationInfo"></span><div class="page-btns" id="pageBtns"></div></div>
   </div>
 
-  <!-- Loading / Error state -->
   <div id="stateMsg" class="center-msg">
     <div class="spinner"></div>
     <h2>Loading data...</h2>
@@ -354,49 +208,287 @@
 </div>
 
 <!-- Status bar -->
-<div class="statusbar">
-  <span id="statusLeft">—</span>
-  <span id="statusRight">—</span>
-</div>
+<div class="statusbar"><span id="statusLeft"></span><span id="statusRight"></span></div>
 
 <script>
-// ─────────────────────────────────────────────
-//  State
-// ─────────────────────────────────────────────
-let allData = { headers: [], rows: [] };
-let filteredRows = [];
+// ═══════════════════════════════════════════════════════════════
+//  CONSTANTS & COUNTRY MAP
+// ═══════════════════════════════════════════════════════════════
+const COUNTRY_NAMES = {
+  CI: "Cote d'Ivoire", KE: 'Kenya', MA: 'Morocco',
+  NG: 'Nigeria', TN: 'Tunisia', UG: 'Uganda',
+};
+const CHART_COLORS = {
+  orders: { line: '#4f8ef7', fill: 'rgba(79,142,247,.1)' },
+  nc:     { line: '#7c5cfc', fill: 'rgba(124,92,252,.1)' },
+  ncp:    { line: '#22c55e', fill: 'rgba(34,197,94,.1)' },
+  ondemand: { line: '#f59e0b', fill: 'rgba(245,158,11,.1)' },
+  rolling: '#f97316',
+};
+const PAGE_SIZE = 50;
+
+// ═══════════════════════════════════════════════════════════════
+//  METRICS UTILITY FUNCTIONS  (lib/metrics equivalent)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Week-over-Week percentage change.
+ * @param {number} current
+ * @param {number} previous
+ * @returns {number|null} percentage change, null if not computable
+ */
+function calcWoW(current, previous) {
+  if (previous == null || isNaN(current) || isNaN(previous) || previous === 0) return null;
+  return ((current - previous) / Math.abs(previous)) * 100;
+}
+
+/**
+ * Year-over-Year percentage change. Matches by ISO week number.
+ * @param {string} weekDate - date string YYYY-MM-DD
+ * @param {number} currentVal
+ * @param {Map<string, object>} weekMap - keyed by YYYY-MM-DD
+ * @returns {{pct: number|null, priorVal: number|null}}
+ */
+function calcYoY(weekDate, currentVal, weekMap) {
+  const d = new Date(weekDate + 'T00:00:00');
+  const isoWk = getISOWeek(d);
+  const isoYr = getISOYear(d);
+  const priorYear = isoYr - 1;
+  // Find the week in the prior year with the same ISO week number
+  for (const [wk, data] of weekMap) {
+    const wd = new Date(wk + 'T00:00:00');
+    if (getISOYear(wd) === priorYear && getISOWeek(wd) === isoWk) {
+      return { pct: calcWoW(currentVal, data), priorVal: data };
+    }
+  }
+  return { pct: null, priorVal: null };
+}
+
+/**
+ * NC Penetration: New Customers / Total Orders * 100.
+ * @param {number} nc
+ * @param {number} totalOrders
+ * @returns {number}
+ */
+function calcNCPenetration(nc, totalOrders) {
+  if (!totalOrders || totalOrders === 0) return 0;
+  return (nc / totalOrders) * 100;
+}
+
+/**
+ * N-period rolling average.
+ * @param {number[]} values - ordered chronologically
+ * @param {number} window - default 4
+ * @returns {(number|null)[]}
+ */
+function calcRollingAvg(values, window = 4) {
+  return values.map((_, i) => {
+    if (i < window - 1) return null;
+    let sum = 0;
+    for (let j = i - window + 1; j <= i; j++) sum += (values[j] || 0);
+    return sum / window;
+  });
+}
+
+/**
+ * Streak: how many consecutive weeks a metric has been rising or falling.
+ * @param {number[]} values - chronological order
+ * @returns {{count: number, direction: 'up'|'down'|'flat'}}
+ */
+function calcStreak(values) {
+  if (values.length < 2) return { count: 0, direction: 'flat' };
+  let direction = null;
+  let count = 0;
+  for (let i = values.length - 1; i >= 1; i--) {
+    const diff = values[i] - values[i - 1];
+    const dir = diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat';
+    if (dir === 'flat') break;
+    if (direction === null) direction = dir;
+    if (dir !== direction) break;
+    count++;
+  }
+  return { count, direction: direction || 'flat' };
+}
+
+/**
+ * Best and worst values in an array with their indices.
+ * @param {number[]} values
+ * @param {string[]} labels - week labels for display
+ * @returns {{best: {val:number,label:string}, worst: {val:number,label:string}}|null}
+ */
+function calcBestWorst(values, labels) {
+  if (!values.length) return null;
+  let bestI = 0, worstI = 0;
+  for (let i = 1; i < values.length; i++) {
+    if (values[i] > values[bestI]) bestI = i;
+    if (values[i] < values[worstI]) worstI = i;
+  }
+  return {
+    best:  { val: values[bestI],  label: labels[bestI]  || '' },
+    worst: { val: values[worstI], label: labels[worstI] || '' },
+  };
+}
+
+/**
+ * Check if a week date string falls in the current ISO week.
+ * @param {string} weekDate - YYYY-MM-DD
+ * @returns {boolean}
+ */
+function isCurrentWeek(weekDate) {
+  const now = new Date();
+  return getISOYear(now) === getISOYear(new Date(weekDate + 'T00:00:00'))
+      && getISOWeek(now) === getISOWeek(new Date(weekDate + 'T00:00:00'));
+}
+
+/** ISO week number (1-53). */
+function getISOWeek(d) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil(((date - yearStart) / 86400000 + 1) / 7);
+}
+
+/** ISO year for week (handles year boundary). */
+function getISOYear(d) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+  return date.getUTCFullYear();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  DATA LAYER
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * @typedef {Object} SheetRow
+ * @property {string} week - YYYY-MM-DD
+ * @property {string} country - 2-letter code
+ * @property {number} ordersNoOndemand
+ * @property {number} nc - new customers
+ * @property {number} ordersOndemand
+ * @property {number} totalOrders
+ * @property {number} ncPenetration
+ */
+
+/**
+ * Parse raw Google Sheet rows into typed objects.
+ * @param {string[]} headers
+ * @param {string[][]} rows
+ * @returns {SheetRow[]}
+ */
+function parseSheetData(headers, rows) {
+  const idx = {};
+  headers.forEach((h, i) => { idx[h.toLowerCase().trim()] = i; });
+  const wi = idx['week'] ?? 0;
+  const ci = idx['country'] ?? 1;
+  const oi = idx['orders_no_ondemand'] ?? 2;
+  const ni = idx['nc'] ?? 3;
+  const di = idx['orders_ondemand'] ?? 4;
+
+  return rows.map(r => {
+    const ordersNoOndemand = parseInt(r[oi]) || 0;
+    const nc = parseInt(r[ni]) || 0;
+    const ordersOndemand = parseInt(r[di]) || 0;
+    const totalOrders = ordersNoOndemand + ordersOndemand;
+    return {
+      week: r[wi] || '',
+      country: r[ci] || '',
+      ordersNoOndemand,
+      nc,
+      ordersOndemand,
+      totalOrders,
+      ncPenetration: calcNCPenetration(nc, totalOrders),
+    };
+  }).filter(r => r.week);
+}
+
+/**
+ * @typedef {Object} WeekAgg
+ * @property {string} week
+ * @property {number} ordersNoOndemand
+ * @property {number} nc
+ * @property {number} ordersOndemand
+ * @property {number} totalOrders
+ * @property {number} ncPenetration
+ */
+
+/**
+ * Aggregate rows by week (summing across selected countries).
+ * @param {SheetRow[]} rows
+ * @returns {WeekAgg[]} sorted chronologically (oldest first)
+ */
+function aggregateByWeek(rows) {
+  const map = new Map();
+  for (const r of rows) {
+    let w = map.get(r.week);
+    if (!w) { w = { week: r.week, ordersNoOndemand: 0, nc: 0, ordersOndemand: 0 }; map.set(r.week, w); }
+    w.ordersNoOndemand += r.ordersNoOndemand;
+    w.nc += r.nc;
+    w.ordersOndemand += r.ordersOndemand;
+  }
+  return Array.from(map.values()).map(w => {
+    w.totalOrders = w.ordersNoOndemand + w.ordersOndemand;
+    w.ncPenetration = calcNCPenetration(w.nc, w.totalOrders);
+    return w;
+  }).sort((a, b) => a.week.localeCompare(b.week));
+}
+
+/**
+ * Build a lookup map of week -> metric value (for YoY).
+ * @param {WeekAgg[]} weeks
+ * @param {string} metric - property name
+ * @returns {Map<string, number>}
+ */
+function buildWeekMap(weeks, metric) {
+  const m = new Map();
+  for (const w of weeks) m.set(w.week, w[metric]);
+  return m;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  APP STATE
+// ═══════════════════════════════════════════════════════════════
+let rawData = [];          // SheetRow[] — all parsed rows
+let allCountries = [];     // sorted unique country codes
+let selectedCountries = []; // [] means ALL
+let rangeWeeks = 13;       // 0 = all
+let weeklyData = [];       // WeekAgg[] — current filtered + aggregated
+let allWeeklyData = [];    // WeekAgg[] — full history for YoY lookups
+let tableRows = [];        // for table display
+let filteredTableRows = [];
 let sortCol = -1, sortAsc = true;
 let currentPage = 1;
-const PAGE_SIZE = 50;
-let refreshCountdown = 30;
-let refreshTimer = null;
+let charts = {};
 let countdownTimer = null;
-let activeSheet = null;
-const charts = {};
+let refreshCountdown = 60;
+let lastFetchedHeaders = [];
+let lastFetchedRows = [];
 
-// ─────────────────────────────────────────────
-//  Data loading
-// ─────────────────────────────────────────────
-async function loadData(sheetName) {
-  setProgress(20);
-  const url = sheetName ? `/api/sheet/${encodeURIComponent(sheetName)}` : '/api/data';
+// ═══════════════════════════════════════════════════════════════
+//  DATA LOADING
+// ═══════════════════════════════════════════════════════════════
+async function loadData() {
+  setProgress(15);
   try {
-    const res = await fetch(url);
-    setProgress(60);
+    const res = await fetch('/api/data');
+    setProgress(50);
     const data = await res.json();
+    if (data.error) { showError(data.error, data.message || ''); setProgress(0); return; }
 
-    if (data.error) {
-      showError(data.error, data.message || '');
-      setProgress(0);
-      return;
-    }
+    lastFetchedHeaders = data.headers;
+    lastFetchedRows = data.rows;
+    rawData = parseSheetData(data.headers, data.rows);
+    allCountries = [...new Set(rawData.map(r => r.country))].sort();
 
-    allData = data;
-    activeSheet = data.sheet_name;
-    renderDashboard(data);
+    // Init country filter from URL or default
+    initCountryFilterFromURL();
+    renderCountryDropdown();
+    applyFilters();
+
+    document.getElementById('dashTitle').textContent = data.spreadsheet_title || 'Africa Weekly Scorecard';
     setProgress(100);
     setTimeout(() => setProgress(0), 400);
-    updateStatus(`Last updated: ${new Date().toLocaleTimeString()}`, `${data.rows.length} rows`);
+    updateStatus(`Last updated: ${new Date().toLocaleTimeString()}`, `${rawData.length} rows loaded`);
     resetCountdown();
   } catch (e) {
     showError('Connection error', e.message);
@@ -404,352 +496,493 @@ async function loadData(sheetName) {
   }
 }
 
-function resetCountdown() {
-  clearInterval(countdownTimer);
-  refreshCountdown = 30;
-  countdownTimer = setInterval(() => {
-    refreshCountdown--;
-    document.getElementById('nextRefreshLabel').textContent =
-      refreshCountdown > 0 ? `Refreshing in ${refreshCountdown}s` : 'Refreshing...';
-    if (refreshCountdown <= 0) {
-      clearInterval(countdownTimer);
-      loadData(activeSheet);
-    }
-  }, 1000);
-}
+function applyFilters() {
+  // Filter by country
+  const filtered = selectedCountries.length
+    ? rawData.filter(r => selectedCountries.includes(r.country))
+    : rawData;
 
-// ─────────────────────────────────────────────
-//  Render
-// ─────────────────────────────────────────────
-function renderDashboard(data) {
+  // Full history aggregated (for YoY lookups, no date range limit)
+  allWeeklyData = aggregateByWeek(filtered);
+
+  // Apply date range
+  let ranged = allWeeklyData;
+  if (rangeWeeks > 0 && allWeeklyData.length > rangeWeeks) {
+    ranged = allWeeklyData.slice(-rangeWeeks);
+  }
+  weeklyData = ranged;
+
+  // Table rows = filtered raw data within date range
+  const minWeek = weeklyData.length ? weeklyData[0].week : '';
+  tableRows = filtered.filter(r => r.week >= minWeek).sort((a, b) => b.week.localeCompare(a.week) || a.country.localeCompare(b.country));
+  filteredTableRows = [...tableRows];
+
   document.getElementById('stateMsg').style.display = 'none';
-
-  // Titles
-  document.getElementById('dashTitle').textContent =
-    data.spreadsheet_title || 'Scorecard Dashboard';
-  document.getElementById('dashSubtitle').textContent =
-    `Sheet: ${data.sheet_name || ''}`;
-
-  // Sheet tabs
-  renderSheetTabs(data.all_sheets || [], data.sheet_name);
-
-  // Table
-  renderTable(data.headers, data.rows);
-
-  // KPIs & charts from numeric columns
-  renderKPIs(data.headers, data.rows);
-  renderCharts(data.headers, data.rows);
+  renderAll();
+  syncURL();
 }
 
-function renderSheetTabs(sheets, active) {
-  const container = document.getElementById('sheetTabs');
-  if (sheets.length <= 1) { container.innerHTML = ''; return; }
-  container.innerHTML = sheets.map(s => `
-    <div class="sheet-tab ${s === active ? 'active' : ''}"
-         onclick="switchSheet('${escHtml(s)}')">${escHtml(s)}</div>
-  `).join('');
+function renderAll() {
+  renderKPIs();
+  renderCharts();
+  renderTable();
+  const sub = selectedCountries.length
+    ? selectedCountries.map(c => COUNTRY_NAMES[c] || c).join(', ')
+    : 'All Countries';
+  const latest = weeklyData.length ? weeklyData[weeklyData.length - 1].week : '';
+  document.getElementById('dashSubtitle').textContent = `${sub} · Latest: ${formatWeekLabel(latest)}`;
 }
 
-function switchSheet(name) {
-  loadData(name);
+// ═══════════════════════════════════════════════════════════════
+//  COUNTRY FILTER
+// ═══════════════════════════════════════════════════════════════
+function renderCountryDropdown() {
+  const dd = document.getElementById('countryDropdown');
+  let html = `<div class="ms-option all-opt" onclick="toggleAllCountries()">
+    <input type="checkbox" id="cb_all" ${selectedCountries.length === 0 ? 'checked' : ''}> All Countries
+  </div>`;
+  for (const c of allCountries) {
+    const checked = selectedCountries.length === 0 || selectedCountries.includes(c) ? 'checked' : '';
+    html += `<div class="ms-option" onclick="toggleCountry('${c}')">
+      <input type="checkbox" id="cb_${c}" ${checked}> ${COUNTRY_NAMES[c] || c} (${c})
+    </div>`;
+  }
+  dd.innerHTML = html;
+  updateTriggerLabel();
 }
 
-// ── KPI Cards ──────────────────────────────
-function renderKPIs(headers, rows) {
-  const grid = document.getElementById('kpiGrid');
-  if (!headers.length || !rows.length) { grid.innerHTML = ''; return; }
+function toggleDropdown() {
+  document.getElementById('countryDropdown').classList.toggle('open');
+}
 
-  const numericCols = detectNumericCols(headers, rows);
-  if (numericCols.length === 0) { grid.innerHTML = ''; return; }
+function toggleAllCountries() {
+  selectedCountries = [];
+  renderCountryDropdown();
+  applyFilters();
+}
 
-  const cards = numericCols.slice(0, 8).map(ci => {
-    const vals = rows.map(r => parseNum(r[ci])).filter(v => !isNaN(v));
-    if (!vals.length) return '';
-    const sum = vals.reduce((a, b) => a + b, 0);
-    const avg = sum / vals.length;
-    const isPercent = headers[ci] && /(%|rate|pct|percent)/i.test(headers[ci]);
-    const displayVal = isPercent
-      ? fmt(avg, true)
-      : vals.length === rows.length ? fmt(sum) : fmt(avg);
-    const label = isPercent ? 'Avg' : vals.length === rows.length ? 'Total' : 'Avg';
-    return `
-      <div class="kpi-card">
-        <div class="kpi-label">${escHtml(headers[ci])}</div>
-        <div class="kpi-value">${displayVal}</div>
-        <div class="kpi-sub">${label} · ${vals.length} values</div>
-      </div>`;
+function toggleCountry(code) {
+  if (selectedCountries.length === 0) {
+    // Was "All" — switch to all except this one? No, switch to only this one
+    selectedCountries = [code];
+  } else if (selectedCountries.includes(code)) {
+    selectedCountries = selectedCountries.filter(c => c !== code);
+    if (selectedCountries.length === 0) selectedCountries = []; // back to all
+  } else {
+    selectedCountries.push(code);
+  }
+  // If all selected individually, revert to "All"
+  if (selectedCountries.length === allCountries.length) selectedCountries = [];
+  renderCountryDropdown();
+  applyFilters();
+}
+
+function updateTriggerLabel() {
+  const trigger = document.getElementById('countryTrigger');
+  if (selectedCountries.length === 0) trigger.textContent = 'All Countries';
+  else if (selectedCountries.length === 1) trigger.textContent = COUNTRY_NAMES[selectedCountries[0]] || selectedCountries[0];
+  else trigger.textContent = `${selectedCountries.length} countries`;
+}
+
+// Close dropdown on outside click
+document.addEventListener('click', e => {
+  const ms = document.getElementById('countryFilter');
+  if (!ms.contains(e.target)) document.getElementById('countryDropdown').classList.remove('open');
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  DATE RANGE
+// ═══════════════════════════════════════════════════════════════
+function setRange(weeks) {
+  rangeWeeks = weeks;
+  document.querySelectorAll('.range-pill').forEach(p => {
+    p.classList.toggle('active', parseInt(p.dataset.weeks) === weeks);
   });
-
-  grid.innerHTML = cards.join('');
+  applyFilters();
 }
 
-// ── Charts ────────────────────────────────
-function renderCharts(headers, rows) {
+// ═══════════════════════════════════════════════════════════════
+//  URL SYNC
+// ═══════════════════════════════════════════════════════════════
+function syncURL() {
+  const params = new URLSearchParams();
+  if (selectedCountries.length) params.set('country', selectedCountries.join(','));
+  if (rangeWeeks !== 13) params.set('range', rangeWeeks);
+  const qs = params.toString();
+  const url = qs ? `${location.pathname}?${qs}` : location.pathname;
+  history.replaceState(null, '', url);
+}
+
+function initCountryFilterFromURL() {
+  const params = new URLSearchParams(location.search);
+  const c = params.get('country');
+  if (c) selectedCountries = c.split(',').filter(x => allCountries.includes(x));
+  else selectedCountries = [];
+  const r = params.get('range');
+  if (r != null) {
+    rangeWeeks = parseInt(r) || 0;
+    document.querySelectorAll('.range-pill').forEach(p => {
+      p.classList.toggle('active', parseInt(p.dataset.weeks) === rangeWeeks);
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  KPI CARDS
+// ═══════════════════════════════════════════════════════════════
+function renderKPIs() {
+  const grid = document.getElementById('kpiGrid');
+  if (!weeklyData.length) { grid.innerHTML = ''; return; }
+
+  const metrics = [
+    { key: 'totalOrders',       label: 'Total Orders',     fmt: fmtInt,  pct: false },
+    { key: 'nc',                label: 'New Customers',    fmt: fmtInt,  pct: false },
+    { key: 'ncPenetration',     label: 'NC Penetration',   fmt: fmtPct,  pct: true  },
+    { key: 'ordersOndemand',    label: 'On-Demand Orders', fmt: fmtInt,  pct: false },
+  ];
+
+  const latest = weeklyData[weeklyData.length - 1];
+  const prev   = weeklyData.length > 1 ? weeklyData[weeklyData.length - 2] : null;
+  const partial = isCurrentWeek(latest.week);
+
+  // Build full-history week maps for YoY
+  const fullMaps = {};
+  for (const m of metrics) fullMaps[m.key] = buildWeekMap(allWeeklyData, m.key);
+
+  grid.innerHTML = metrics.map(m => {
+    const val = latest[m.key];
+    const wow = prev ? calcWoW(val, prev[m.key]) : null;
+    const yoy = calcYoY(latest.week, val, fullMaps[m.key]);
+    const vals = weeklyData.map(w => w[m.key]);
+    const labels = weeklyData.map(w => w.week);
+    const streak = calcStreak(vals);
+    const bw = calcBestWorst(vals, labels);
+    const sparkVals = vals.slice(-8);
+
+    return `<div class="kpi-card">
+      <div class="kpi-top">
+        <div class="kpi-label">${m.label}</div>
+        ${partial ? '<span class="kpi-partial">Partial week</span>' : ''}
+      </div>
+      <div class="kpi-value-row">
+        <div class="kpi-value">${m.fmt(val)}</div>
+        <div class="kpi-deltas">
+          ${renderDelta(wow, 'WoW')}
+          ${renderDelta(yoy.pct, 'YoY')}
+        </div>
+      </div>
+      ${streak.count > 0 ? `<div class="kpi-streak">${streak.direction === 'up' ? '&#9650;' : '&#9660;'} ${streak.count} week${streak.count > 1 ? 's' : ''} in a row</div>` : ''}
+      <div class="kpi-sparkline">${renderSparkline(sparkVals)}</div>
+      ${bw ? `<div class="kpi-best-worst">
+        <span class="bw-best">Best: ${m.fmt(bw.best.val)} (${formatWeekLabel(bw.best.label)})</span>
+        <span class="bw-worst">Worst: ${m.fmt(bw.worst.val)} (${formatWeekLabel(bw.worst.label)})</span>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderDelta(pct, label) {
+  if (pct == null) return `<span class="kpi-delta flat">N/A ${label}</span>`;
+  const cls = Math.abs(pct) < 0.5 ? 'flat' : pct > 0 ? 'up' : 'down';
+  const arrow = cls === 'up' ? '&#9650;' : cls === 'down' ? '&#9660;' : '';
+  return `<span class="kpi-delta ${cls}">${arrow} ${Math.abs(pct).toFixed(1)}% ${label}</span>`;
+}
+
+function renderSparkline(vals) {
+  if (vals.length < 2) return '';
+  const w = 200, h = 32, pad = 2;
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const range = max - min || 1;
+  const points = vals.map((v, i) => {
+    const x = pad + (i / (vals.length - 1)) * (w - pad * 2);
+    const y = h - pad - ((v - min) / range) * (h - pad * 2);
+    return `${x},${y}`;
+  });
+  const trend = vals[vals.length - 1] >= vals[0] ? 'var(--green)' : 'var(--red)';
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <polyline points="${points.join(' ')}" fill="none" stroke="${trend}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CHARTS
+// ═══════════════════════════════════════════════════════════════
+function renderCharts() {
   const grid = document.getElementById('chartGrid');
-  // Destroy existing
   Object.values(charts).forEach(c => c.destroy());
-  for (const k in charts) delete charts[k];
+  charts = {};
+  if (weeklyData.length < 2) { grid.innerHTML = ''; return; }
 
-  if (!headers.length || rows.length < 2) { grid.innerHTML = ''; return; }
+  const labels = weeklyData.map(w => formatWeekLabel(w.week));
+  const lastIsPartial = isCurrentWeek(weeklyData[weeklyData.length - 1].week);
 
-  const numericCols = detectNumericCols(headers, rows);
-  if (numericCols.length === 0) { grid.innerHTML = ''; return; }
+  const defs = [
+    { id: 'chartOrders', title: 'Total Orders', key: 'totalOrders', color: CHART_COLORS.orders, fmt: fmtInt },
+    { id: 'chartNC',     title: 'New Customers', key: 'nc',         color: CHART_COLORS.nc,     fmt: fmtInt },
+    { id: 'chartNCP',    title: 'NC Penetration (%)', key: 'ncPenetration', color: CHART_COLORS.ncp, fmt: fmtPct },
+    { id: 'chartOD',     title: 'On-Demand Orders', key: 'ordersOndemand', color: CHART_COLORS.ondemand, fmt: fmtInt },
+  ];
 
-  // Use first text column as label axis, first few numeric as series
-  const labelCol = detectLabelCol(headers, rows);
-  const labels = rows.slice(0, 30).map(r => r[labelCol] || '');
-
-  const seriesCols = numericCols.filter(c => c !== labelCol).slice(0, 3);
-  if (seriesCols.length === 0) { grid.innerHTML = ''; return; }
-
-  const COLORS = ['rgba(79,142,247,0.85)', 'rgba(124,92,252,0.85)', 'rgba(34,197,94,0.85)'];
-  const BORDERS = ['#4f8ef7', '#7c5cfc', '#22c55e'];
-
-  // Bar chart for first series
-  const chartDivs = seriesCols.map((ci, i) => {
-    const id = `chart_${ci}`;
-    return `
-      <div class="chart-card">
-        <h3>${escHtml(headers[ci])}</h3>
-        <div class="chart-wrap"><canvas id="${id}"></canvas></div>
-      </div>`;
+  grid.innerHTML = defs.map(d => {
+    const vals = weeklyData.map(w => w[d.key]);
+    const bw = calcBestWorst(vals, labels);
+    return `<div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">${d.title}</span>
+        ${bw ? `<div class="chart-summary">
+          <span class="best">Best: ${d.fmt(bw.best.val)} (${bw.best.label})</span>
+          <span class="worst">Worst: ${d.fmt(bw.worst.val)} (${bw.worst.label})</span>
+        </div>` : ''}
+      </div>
+      <div class="chart-wrap"><canvas id="${d.id}"></canvas></div>
+    </div>`;
   }).join('');
 
-  grid.innerHTML = chartDivs;
+  defs.forEach(d => {
+    const vals = weeklyData.map(w => w[d.key]);
+    const rolling = calcRollingAvg(vals, 4);
 
-  seriesCols.forEach((ci, i) => {
-    const id = `chart_${ci}`;
-    const ctx = document.getElementById(id).getContext('2d');
-    const vals = rows.slice(0, 30).map(r => parseNum(r[ci]));
-    charts[id] = new Chart(ctx, {
-      type: 'bar',
+    // Point styling: make last point different if partial
+    const pointBg = vals.map((_, i) => {
+      if (lastIsPartial && i === vals.length - 1) return 'rgba(245,158,11,0.8)';
+      return d.color.line;
+    });
+    const borderDash = lastIsPartial ? undefined : undefined; // handled per-point below
+
+    // Build segment styling for partial week (dashed last segment)
+    const segment = lastIsPartial ? {
+      borderDash: ctx => ctx.p1DataIndex === vals.length - 1 ? [5, 4] : undefined,
+    } : {};
+
+    const ctx = document.getElementById(d.id).getContext('2d');
+    charts[d.id] = new Chart(ctx, {
+      type: 'line',
       data: {
         labels,
-        datasets: [{
-          label: headers[ci],
-          data: vals,
-          backgroundColor: COLORS[i % COLORS.length],
-          borderColor: BORDERS[i % BORDERS.length],
-          borderWidth: 1,
-          borderRadius: 4,
-        }],
+        datasets: [
+          {
+            label: d.title,
+            data: vals,
+            borderColor: d.color.line,
+            backgroundColor: d.color.fill,
+            borderWidth: 2,
+            pointRadius: vals.length > 30 ? 0 : 3,
+            pointHoverRadius: 5,
+            pointBackgroundColor: pointBg,
+            fill: true,
+            tension: 0.3,
+            segment,
+          },
+          {
+            label: '4W Rolling Avg',
+            data: rolling,
+            borderColor: CHART_COLORS.rolling,
+            borderWidth: 1.5,
+            borderDash: [6, 4],
+            pointRadius: 0,
+            fill: false,
+            tension: 0.3,
+          },
+        ],
       },
       options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'index' },
+        plugins: {
+          legend: { display: true, labels: { color: '#7b82a0', boxWidth: 14, font: { size: 11 } } },
+          tooltip: {
+            backgroundColor: '#1a1d27',
+            borderColor: '#2e3250',
+            borderWidth: 1,
+            titleColor: '#e8eaf0',
+            bodyColor: '#e8eaf0',
+            padding: 10,
+            callbacks: {
+              label: function(ctx) {
+                const v = ctx.raw;
+                if (v == null) return '';
+                return `${ctx.dataset.label}: ${d.fmt(v)}`;
+              },
+            },
+          },
+        },
         scales: {
-          x: { ticks: { color: '#7b82a0', maxRotation: 45 }, grid: { color: '#2e3250' } },
-          y: { ticks: { color: '#7b82a0' }, grid: { color: '#2e3250' } },
+          x: {
+            ticks: { color: '#7b82a0', maxRotation: 45, maxTicksLimit: 15, font: { size: 11 } },
+            grid: { color: 'rgba(46,50,80,.4)' },
+          },
+          y: {
+            ticks: { color: '#7b82a0', font: { size: 11 }, callback: v => d.key === 'ncPenetration' ? v.toFixed(1) + '%' : fmtShort(v) },
+            grid: { color: 'rgba(46,50,80,.4)' },
+          },
         },
       },
     });
   });
 }
 
-// ── Table ─────────────────────────────────
-function renderTable(headers, rows) {
-  if (!headers.length) return;
-
+// ═══════════════════════════════════════════════════════════════
+//  DATA TABLE
+// ═══════════════════════════════════════════════════════════════
+function renderTable() {
+  if (!tableRows.length) { document.getElementById('tableCard').style.display = 'none'; return; }
   document.getElementById('tableCard').style.display = '';
-  document.getElementById('tableTitle').textContent =
-    `Data  ·  ${rows.length} rows`;
+  document.getElementById('tableTitle').textContent = `Detail Data · ${tableRows.length} rows`;
+  document.getElementById('searchInput').value = '';
 
-  // Head
+  const cols = ['week', 'country', 'ordersNoOndemand', 'ordersOndemand', 'totalOrders', 'nc', 'ncPenetration'];
+  const colLabels = ['Week', 'Country', 'Orders', 'On-Demand', 'Total Orders', 'New Customers', 'NC Penetration %'];
+
   const thead = document.getElementById('tableHead');
-  thead.innerHTML = '<tr>' + headers.map((h, i) =>
-    `<th onclick="sortBy(${i})" id="th_${i}">${escHtml(h)}<span class="sort-icon">↕</span></th>`
+  thead.innerHTML = '<tr>' + colLabels.map((h, i) =>
+    `<th onclick="sortTableBy(${i})" id="th_${i}">${esc(h)}<span class="sort-icon"> &#8597;</span></th>`
   ).join('') + '</tr>';
 
-  filteredRows = [...rows];
+  filteredTableRows = [...tableRows];
+  sortCol = -1;
   currentPage = 1;
-  renderTablePage();
+  renderTablePage(cols);
 }
 
-function renderTablePage() {
+function renderTablePage(cols) {
+  cols = cols || ['week', 'country', 'ordersNoOndemand', 'ordersOndemand', 'totalOrders', 'nc', 'ncPenetration'];
   const tbody = document.getElementById('tableBody');
-  const headers = allData.headers;
   const start = (currentPage - 1) * PAGE_SIZE;
-  const pageRows = filteredRows.slice(start, start + PAGE_SIZE);
+  const page = filteredTableRows.slice(start, start + PAGE_SIZE);
 
-  tbody.innerHTML = pageRows.map(row =>
-    '<tr>' + row.map((cell, ci) => {
-      const styled = styleCell(cell, headers[ci] || '');
-      const isNum = isNumericLike(cell);
-      return `<td class="${isNum ? 'num' : ''}">${styled}</td>`;
-    }).join('') + '</tr>'
-  ).join('');
+  tbody.innerHTML = page.map(row => {
+    return '<tr>' + cols.map(col => {
+      let v = row[col];
+      if (col === 'country') return `<td>${COUNTRY_NAMES[v] || v} (${v})</td>`;
+      if (col === 'week') return `<td>${formatWeekLabel(v)}${isCurrentWeek(v) ? ' <span class="chip chip-red" style="font-size:9px">partial</span>' : ''}</td>`;
+      if (col === 'ncPenetration') return `<td class="num">${v.toFixed(2)}%</td>`;
+      if (typeof v === 'number') return `<td class="num">${v.toLocaleString()}</td>`;
+      return `<td>${esc(String(v))}</td>`;
+    }).join('') + '</tr>';
+  }).join('');
 
-  renderPagination();
-}
-
-function styleCell(val, header) {
-  if (val === '' || val === null || val === undefined) return '<span style="color:var(--muted)">—</span>';
-  const low = String(val).toLowerCase();
-
-  // Status-like values
-  if (/^(yes|true|on|active|done|complete|achieved|pass|ok|good)$/i.test(low))
-    return `<span class="chip chip-green">${escHtml(val)}</span>`;
-  if (/^(no|false|off|inactive|failed|miss|behind|fail|bad)$/i.test(low))
-    return `<span class="chip chip-red">${escHtml(val)}</span>`;
-  if (/^(pending|in.?progress|partial|wip|review|hold)$/i.test(low))
-    return `<span class="chip chip-yellow">${escHtml(val)}</span>`;
-  if (/^(n\/a|n\.a|tbd|unknown)$/i.test(low))
-    return `<span class="chip chip-blue">${escHtml(val)}</span>`;
-
-  // URL-like
-  if (/^https?:\/\//i.test(val))
-    return `<a href="${escHtml(val)}" target="_blank" style="color:var(--accent)">${escHtml(val.length > 40 ? val.slice(0,40)+'…' : val)}</a>`;
-
-  return escHtml(String(val));
-}
-
-function renderPagination() {
-  const total = filteredRows.length;
+  // Pagination
+  const total = filteredTableRows.length;
   const pages = Math.ceil(total / PAGE_SIZE);
-  const start = (currentPage - 1) * PAGE_SIZE + 1;
-  const end = Math.min(currentPage * PAGE_SIZE, total);
-
-  document.getElementById('paginationInfo').textContent =
-    `${start}–${end} of ${total} rows`;
-
+  document.getElementById('paginationInfo').textContent = `${start + 1}–${Math.min(start + PAGE_SIZE, total)} of ${total}`;
   const btns = document.getElementById('pageBtns');
-  let html = `<button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage<=1?'disabled':''}>‹ Prev</button>`;
-  for (let p = Math.max(1, currentPage-2); p <= Math.min(pages, currentPage+2); p++) {
-    html += `<button class="page-btn ${p===currentPage?'current':''}" onclick="goPage(${p})">${p}</button>`;
+  let bhtml = `<button class="page-btn" onclick="goPage(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>Prev</button>`;
+  for (let p = Math.max(1, currentPage - 2); p <= Math.min(pages, currentPage + 2); p++) {
+    bhtml += `<button class="page-btn ${p === currentPage ? 'current' : ''}" onclick="goPage(${p})">${p}</button>`;
   }
-  html += `<button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage>=pages?'disabled':''}>Next ›</button>`;
-  btns.innerHTML = html;
+  bhtml += `<button class="page-btn" onclick="goPage(${currentPage + 1})" ${currentPage >= pages ? 'disabled' : ''}>Next</button>`;
+  btns.innerHTML = bhtml;
 }
 
-function goPage(p) {
-  const pages = Math.ceil(filteredRows.length / PAGE_SIZE);
-  if (p < 1 || p > pages) return;
-  currentPage = p;
-  renderTablePage();
-}
-
-// ─────────────────────────────────────────────
-//  Sort & Filter
-// ─────────────────────────────────────────────
-function sortBy(ci) {
-  if (sortCol === ci) sortAsc = !sortAsc;
-  else { sortCol = ci; sortAsc = true; }
-
-  filteredRows.sort((a, b) => {
-    const av = a[ci] ?? '', bv = b[ci] ?? '';
-    const an = parseNum(av), bn = parseNum(bv);
-    const cmp = (!isNaN(an) && !isNaN(bn)) ? an - bn : String(av).localeCompare(String(bv));
+function sortTableBy(ci) {
+  const cols = ['week', 'country', 'ordersNoOndemand', 'ordersOndemand', 'totalOrders', 'nc', 'ncPenetration'];
+  const key = cols[ci];
+  if (sortCol === ci) sortAsc = !sortAsc; else { sortCol = ci; sortAsc = true; }
+  filteredTableRows.sort((a, b) => {
+    const av = a[key], bv = b[key];
+    const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv));
     return sortAsc ? cmp : -cmp;
   });
-
-  // Update header icons
   document.querySelectorAll('th').forEach(th => th.classList.remove('sorted'));
   const th = document.getElementById(`th_${ci}`);
-  if (th) {
-    th.classList.add('sorted');
-    th.querySelector('.sort-icon').textContent = sortAsc ? ' ↑' : ' ↓';
-  }
-
+  if (th) { th.classList.add('sorted'); th.querySelector('.sort-icon').textContent = sortAsc ? ' \u2191' : ' \u2193'; }
   currentPage = 1;
   renderTablePage();
 }
 
 function filterTable() {
   const q = document.getElementById('searchInput').value.toLowerCase();
-  filteredRows = q
-    ? allData.rows.filter(row => row.some(c => String(c).toLowerCase().includes(q)))
-    : [...allData.rows];
+  filteredTableRows = q
+    ? tableRows.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)))
+    : [...tableRows];
   currentPage = 1;
   renderTablePage();
 }
 
-// ─────────────────────────────────────────────
-//  Utilities
-// ─────────────────────────────────────────────
-function detectNumericCols(headers, rows) {
-  return headers.map((_, ci) => ci).filter(ci => {
-    const sample = rows.slice(0, 20).map(r => r[ci]).filter(v => v !== '' && v !== undefined);
-    const numCount = sample.filter(v => !isNaN(parseNum(v))).length;
-    return sample.length > 0 && numCount / sample.length > 0.6;
-  });
+function goPage(p) {
+  const pages = Math.ceil(filteredTableRows.length / PAGE_SIZE);
+  if (p < 1 || p > pages) return;
+  currentPage = p;
+  renderTablePage();
 }
 
-function detectLabelCol(headers, rows) {
-  // Prefer a column named "name", "label", "category", etc., else first text col
-  const preferred = ['name', 'label', 'category', 'item', 'description', 'title', 'metric', 'kpi'];
-  for (const p of preferred) {
-    const ci = headers.findIndex(h => h && h.toLowerCase().includes(p));
-    if (ci >= 0) return ci;
+// ═══════════════════════════════════════════════════════════════
+//  CSV EXPORT (scoped to current filters)
+// ═══════════════════════════════════════════════════════════════
+function exportCSV() {
+  const cols = ['week', 'country', 'ordersNoOndemand', 'ordersOndemand', 'totalOrders', 'nc', 'ncPenetration'];
+  const headers = ['Week', 'Country', 'Orders (No OnDemand)', 'Orders (OnDemand)', 'Total Orders', 'New Customers', 'NC Penetration %'];
+  const lines = [headers.join(',')];
+  for (const r of filteredTableRows) {
+    lines.push(cols.map(c => {
+      const v = r[c];
+      if (typeof v === 'number' && c === 'ncPenetration') return v.toFixed(2);
+      return typeof v === 'string' && v.includes(',') ? `"${v}"` : v;
+    }).join(','));
   }
-  // First column that is mostly text
-  return headers.findIndex((_, ci) => {
-    const sample = rows.slice(0, 10).map(r => r[ci]).filter(Boolean);
-    return sample.some(v => isNaN(parseNum(v)));
-  }) ?? 0;
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const suffix = selectedCountries.length ? `_${selectedCountries.join('-')}` : '_all';
+  a.download = `scorecard${suffix}_${rangeWeeks || 'all'}w.csv`;
+  a.click();
 }
 
-function parseNum(v) {
-  if (v === '' || v === null || v === undefined) return NaN;
-  const s = String(v).replace(/[$,€£%\s]/g, '');
-  return parseFloat(s);
+// ═══════════════════════════════════════════════════════════════
+//  FORMATTING HELPERS
+// ═══════════════════════════════════════════════════════════════
+function fmtInt(n) {
+  if (n == null || isNaN(n)) return '--';
+  return n.toLocaleString('en-US', { maximumFractionDigits: 0 });
 }
-
-function isNumericLike(v) {
-  return !isNaN(parseNum(v)) && v !== '';
+function fmtPct(n) {
+  if (n == null || isNaN(n)) return '--';
+  return n.toFixed(2) + '%';
 }
-
-function fmt(n, isPercent = false) {
-  if (isNaN(n)) return '—';
-  if (isPercent) return n.toFixed(1) + '%';
-  if (Math.abs(n) >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+function fmtShort(n) {
   if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1) + 'M';
   if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(1) + 'K';
-  return n % 1 === 0 ? n.toLocaleString() : n.toFixed(2);
+  return n.toLocaleString();
+}
+function formatWeekLabel(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  const wk = getISOWeek(d);
+  const yr = getISOYear(d);
+  return `W${String(wk).padStart(2, '0')} ${yr}`;
+}
+function esc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function escHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function setProgress(pct) {
-  document.getElementById('progressBar').style.width = pct + '%';
-}
-
-function updateStatus(left, right) {
-  document.getElementById('statusLeft').textContent = left;
-  document.getElementById('statusRight').textContent = right;
-}
-
+// ═══════════════════════════════════════════════════════════════
+//  UI HELPERS
+// ═══════════════════════════════════════════════════════════════
+function setProgress(pct) { document.getElementById('progressBar').style.width = pct + '%'; }
+function updateStatus(l, r) { document.getElementById('statusLeft').textContent = l; document.getElementById('statusRight').textContent = r; }
 function showError(title, msg) {
   document.getElementById('stateMsg').style.display = '';
   document.getElementById('tableCard').style.display = 'none';
   document.getElementById('kpiGrid').innerHTML = '';
   document.getElementById('chartGrid').innerHTML = '';
-  document.getElementById('stateMsg').innerHTML = `
-    <div class="icon">⚠️</div>
-    <h2>${escHtml(title)}</h2>
-    <p>${escHtml(msg)}</p>
-    <button class="btn" onclick="loadData()">Try Again</button>
-  `;
+  document.getElementById('stateMsg').innerHTML = `<h2>${esc(title)}</h2><p>${esc(msg)}</p><button class="btn" onclick="loadData()">Try Again</button>`;
 }
 
-function exportCSV() {
-  const headers = allData.headers;
-  const rows = filteredRows;
-  const lines = [headers.join(','), ...rows.map(r =>
-    r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))];
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'scorecard_export.csv';
-  a.click();
+function resetCountdown() {
+  clearInterval(countdownTimer);
+  refreshCountdown = 60;
+  countdownTimer = setInterval(() => {
+    refreshCountdown--;
+    document.getElementById('nextRefreshLabel').textContent =
+      refreshCountdown > 0 ? `Refreshing in ${refreshCountdown}s` : 'Refreshing...';
+    if (refreshCountdown <= 0) { clearInterval(countdownTimer); loadData(); }
+  }, 1000);
 }
 
-// ─────────────────────────────────────────────
-//  Init
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════
 loadData();
 </script>
 </body>
