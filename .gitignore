@@ -1,0 +1,23 @@
+# Sensitive credentials — never commit these
+token.json
+credentials.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Vercel
+.vercel/
+
+# OS
+.DS_Store
+Thumbs.db
