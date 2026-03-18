@@ -293,7 +293,7 @@ function calcWoW(current, previous) {
  * Year-over-Year percentage change.
  * For weekly: matches by ISO week number.
  * For monthly: matches by month number.
- * For daily: matches by same day-of-year.
+ * For daily: matches by same weekday of same ISO week in prior year.
  * @param {string} periodDate - date string YYYY-MM-DD
  * @param {number} currentVal
  * @param {Map<string, number>} periodMap - keyed by YYYY-MM-DD
@@ -311,12 +311,15 @@ function calcYoY(periodDate, currentVal, periodMap) {
       }
     }
   } else if (activeGranularity === 'day') {
-    const priorDate = new Date(d);
-    priorDate.setFullYear(priorDate.getFullYear() - 1);
-    const key = priorDate.toISOString().slice(0, 10);
-    if (periodMap.has(key)) {
-      const val = periodMap.get(key);
-      return { pct: calcWoW(currentVal, val), priorVal: val };
+    // Match same weekday of same ISO week in prior year
+    const isoWk = getISOWeek(d);
+    const dayOfWeek = d.getUTCDay(); // 0=Sun..6=Sat
+    const priorYear = getISOYear(d) - 1;
+    for (const [pk, val] of periodMap) {
+      const pd = new Date(pk + 'T00:00:00');
+      if (getISOYear(pd) === priorYear && getISOWeek(pd) === isoWk && pd.getUTCDay() === dayOfWeek) {
+        return { pct: calcWoW(currentVal, val), priorVal: val };
+      }
     }
   } else {
     const isoWk = getISOWeek(d);
@@ -1092,7 +1095,7 @@ function buildCountryWeeklyData(countryCode) {
   }
   const weeks = Array.from(byPeriod.values()).sort((a, b) => a.period.localeCompare(b.period));
 
-  // Build lookup by ISO week (or month) for YoY
+  // Build lookup for YoY: key = isoYear-isoWeek-dayOfWeek (daily), isoYear-isoWeek (weekly), year-month (monthly)
   const ordersByIsoKey = {};
   const ncByIsoKey = {};
   for (const w of weeks) {
@@ -1100,7 +1103,7 @@ function buildCountryWeeklyData(countryCode) {
     const key = activeGranularity === 'month'
       ? `${d.getFullYear()}-${d.getMonth()}`
       : activeGranularity === 'day'
-        ? w.period
+        ? `${getISOYear(d)}-${getISOWeek(d)}-${d.getUTCDay()}`
         : `${getISOYear(d)}-${getISOWeek(d)}`;
     ordersByIsoKey[key] = w.orders;
     ncByIsoKey[key] = w.nc;
@@ -1114,7 +1117,7 @@ function buildCountryWeeklyData(countryCode) {
     const priorYearKey = activeGranularity === 'month'
       ? `${d.getFullYear() - 1}-${d.getMonth()}`
       : activeGranularity === 'day'
-        ? (() => { const pd = new Date(d); pd.setFullYear(pd.getFullYear() - 1); return pd.toISOString().slice(0,10); })()
+        ? `${isoYr - 1}-${isoWk}-${d.getUTCDay()}`
         : `${isoYr - 1}-${isoWk}`;
 
     return {
